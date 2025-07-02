@@ -1,6 +1,6 @@
-package org.example.graph.GraphSerializer
+package graph.GraphSerializer
 
-import org.example.graph.Graph
+import graph.Graph
 import com.google.gson.Gson
 
 // Класс для загрузки графа из файла
@@ -18,13 +18,12 @@ class GraphLoader {
         val fileContent = java.io.File(filePath).readText()
         val graph = gson.fromJson(fileContent, Graph::class.java)
         val graphChecker = GraphChecker()
-        if (graphChecker.isValidGraph(graph) && graphChecker.isDataValid(graph)) {
-            println("Граф успешно загружен из файла: $filePath")
+        try {
+            graphChecker.isValidGraph(graph)
+            graphChecker.isDataValid(graph)
+        } catch (e: IllegalArgumentException) {
+            throw IllegalArgumentException("Ошибка валидации графа: ${e.message}")
         }
-        else {
-            throw IllegalArgumentException("Некорректный граф в файле: $filePath")
-        }
-        
         return graph
 
     }

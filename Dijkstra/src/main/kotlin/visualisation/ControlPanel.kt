@@ -11,15 +11,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.ButtonDefaults
 
 import controller.AppController
 
 @Composable
 fun ControlPanel(
-    controller: AppController, // Контроллер для управления графом
-    onAddVertexClick: () -> Unit = {}, // Обработчик добавления вершины
-    onLoadGraphClick: () -> Unit = {}, // Обработчик загрузки графа
-    onSetStartVertexClick: () -> Unit = {} // Обработчик выбора начальной вершины
+    controller: AppController,
+    onAddVertexClick: () -> Unit = {},
+    isAddVertexModeActive: Boolean = false,
+    onLoadGraphClick: () -> Unit = {},
+    onSetStartVertexClick: () -> Unit = {},
+    onStartPauseClick: () -> Unit = {},
+    isStartPauseEnabled: Boolean = true,
+    speedValue: Float = 0.5f,
+    onSpeedChange: (Float) -> Unit = {},
+    isSpeedEnabled: Boolean = true,
+    onToEndClick: () -> Unit = {},
+    isToEndEnabled: Boolean = true,
+    onShowTableClick: () -> Unit = {},
+    isShowTableEnabled: Boolean = true,
+    isTableShown: Boolean = false,
+    onResetAlgorithmClick: () -> Unit = {},
+    isResetEnabled: Boolean = true
 ) {
     Column(
         modifier = Modifier
@@ -28,36 +43,41 @@ fun ControlPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Основная колонка с кнопками управления
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ControlButton(
-                text = "Вставить вершину",
+                text = "Добавить вершины",
                 height = 56.dp,
                 onClick = {
-                    println("Кнопка 'Вставить вершину' нажата")
                     onAddVertexClick()
                 },
-                enabled = true
+                enabled = true,
+                buttonColors = if (isAddVertexModeActive) ButtonDefaults.buttonColors(backgroundColor = Color(0xFFE0E0E0)) else ButtonDefaults.buttonColors()
             )
-
             ControlButton(
                 text = "Задать начальную вершину",
                 height = 56.dp,
                 onClick = onSetStartVertexClick,
                 enabled = true
             )
-
-            ControlButton("Показать таблицу", height = 56.dp, enabled = false)
-
-            ControlButton("Скачать граф",
+            ControlButton(
+                text = if (isTableShown) "Скрыть таблицу" else "Показать таблицу",
+                height = 56.dp,
+                onClick = onShowTableClick,
+                enabled = isShowTableEnabled
+            )
+            ControlButton(
+                text = "Сброс алгоритма",
+                height = 56.dp,
+                onClick = onResetAlgorithmClick,
+                enabled = isResetEnabled
+            )
+            ControlButton("Сохранить граф",
             height = 56.dp,
             onClick = {
-                println("Кнопка 'Скачать граф' нажата")
                 controller.saveGraph()
             },
             enabled = true
             )
-
             ControlButton(
                 text = "Загрузить граф",
                 height = 56.dp,
@@ -65,8 +85,6 @@ fun ControlPanel(
                 enabled = true
             )
         }
-
-        // Нижняя панель с дополнительными кнопками
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
@@ -77,32 +95,30 @@ fun ControlPanel(
                 modifier = Modifier.padding(12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Ряд с двумя кнопками управления анимацией
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ControlButton(
                         text = "Старт/Пауза",
                         fontSize = 16.sp,
                         height = 56.dp,
-                        enabled = false,
-                        modifier = Modifier.weight(1f)
+                        enabled = isStartPauseEnabled,
+                        modifier = Modifier.weight(1f),
+                        onClick = onStartPauseClick
                     )
-
                     ControlButton(
                         text = "В конец",
                         fontSize = 16.sp,
                         height = 56.dp,
-                        enabled = false,
-                        modifier = Modifier.weight(1f)
+                        enabled = isToEndEnabled,
+                        modifier = Modifier.weight(1f),
+                        onClick = onToEndClick
                     )
                 }
-
-                Spacer(modifier = Modifier.height(18.dp)) // Вертикальный отступ
-
+                Spacer(modifier = Modifier.height(18.dp))
                 Text("Скорость")
                 Slider(
-                    value = 0.5f,
-                    onValueChange = {},
-                    enabled = false,
+                    value = speedValue,
+                    onValueChange = onSpeedChange,
+                    enabled = isSpeedEnabled,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -110,7 +126,6 @@ fun ControlPanel(
     }
 }
 
-// Настройки кнопки
 @Composable
 fun ControlButton(
     text: String,
@@ -118,14 +133,16 @@ fun ControlButton(
     height: androidx.compose.ui.unit.Dp = 40.dp,
     onClick: () -> Unit = {},
     enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonColors: androidx.compose.material.ButtonColors = ButtonDefaults.buttonColors()
 ) {
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(height)
+            .height(height),
+        colors = buttonColors
     ) {
         Text(
             text,

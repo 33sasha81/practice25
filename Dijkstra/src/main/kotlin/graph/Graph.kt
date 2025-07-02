@@ -1,8 +1,6 @@
-package org.example.graph
-// TODO: поменять пакеты
+package graph
 // Класс для представления графа
 class Graph(var isDirected: Boolean = false) {
-    // TODO: переделать вершины на map
     private val _vertecies = mutableListOf<Vertex>()
     private val _edges = mutableListOf<Edge>()
 

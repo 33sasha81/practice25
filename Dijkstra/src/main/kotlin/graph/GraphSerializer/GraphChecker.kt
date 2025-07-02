@@ -1,26 +1,18 @@
-package org.example.graph.GraphSerializer
+package graph.GraphSerializer
 
-import org.example.graph.Graph
-import org.example.graph.Edge
-import org.example.graph.Vertex
-
-// TODO: добавить обработку ошибок
+import graph.Graph
+import graph.Edge
+import graph.Vertex
+import java.lang.IllegalArgumentException
 
 class GraphChecker {
 
     // Метод для проверки корректности графа
-    fun isValidGraph(graph: Graph): Boolean {
+    fun isValidGraph(graph: Graph){
         
         // Проверка на наличие вершин
         if (graph.vertecies.isEmpty()) {
-            println("Граф не содержит вершин.")
-            return false
-        }
-    
-        // Проверка на наличие ребер
-        if (graph.edges.isEmpty()) {
-            println("Граф не содержит ребер.")
-            return false
+            throw IllegalArgumentException("Граф не содержит вершин.")
         }
     
         val vertexIds = graph.vertecies.map { it.id }.toSet()
@@ -28,39 +20,32 @@ class GraphChecker {
         // Проверка связи вершин и ребер
         for (edge in graph.edges) {
             if (edge.source !in vertexIds || edge.target !in vertexIds) {
-                println("Некорректное ребро: от вершины ${edge.source} к вершине ${edge.target} не существует.")
-                return false
+                throw IllegalArgumentException("Некорректное ребро: от вершины ${edge.source} к вершине ${edge.target} не существует.")
             }
         }
          
         // Проверка уникальности ID вершин
         if (vertexIds.size != graph.vertecies.size) {
-            println("Найдены дублирующиеся ID вершин.")
-            return false
+            throw IllegalArgumentException("Найдены дублирующиеся ID вершин.")
         }
-    
-        return true
+
     }
 
-    fun isDataValid(graph: Graph): Boolean {
+    fun isDataValid(graph: Graph) {
     
         // Проверка корректности вершин
         for (vertex in graph.vertecies) {
             if (!vertex.isValid()) {
-                println("Некорректная вершина: ${vertex.id} с координатами (${vertex.xCoordinate}, ${vertex.yCoordinate}) и цветом ${vertex.color}.")
-                return false
+                throw IllegalArgumentException("Некорректная вершина: ${vertex.id} с координатами (${vertex.xCoordinate}, ${vertex.yCoordinate}) и цветом ${vertex.color}.")
             }
         }
     
         // Проверка корректности ребер
         for (edge in graph.edges) {
             if (!edge.isValid()) {
-                println("Некорректное ребро: от вершины ${edge.source} к вершине ${edge.target} с весом ${edge.weight}.")
-                return false
+                throw IllegalArgumentException("Некорректное ребро: от вершины ${edge.source} к вершине ${edge.target} с весом ${edge.weight}.")
             }
         }
-
-        return true
     }
 
 }

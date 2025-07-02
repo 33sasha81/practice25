@@ -1,4 +1,4 @@
-package org.example.graph
+package graph
 
 // Класс для представления ребра графа
 data class Edge(var weight: Int, var source: Int, var target: Int) {

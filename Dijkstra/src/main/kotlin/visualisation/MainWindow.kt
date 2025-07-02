@@ -30,124 +30,186 @@ import javax.swing.JFileChooser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 
 @Composable
 fun MainWindowContent(controller: AppController) {
-    val addVertexMode = remember { mutableStateOf(false) } // Режим добавления вершины
-    var canvasSize by remember { mutableStateOf(Size.Zero) } // Размер холста графа
-    val density = LocalDensity.current // Для преобразования dp в пиксели
-    var showFileDialog by remember { mutableStateOf(false) } // Показать диалог выбора файла
-    var setStartVertexMode by remember { mutableStateOf(false) } // Режим выбора стартовой вершины
-    var startVertexId by remember { mutableStateOf<Int?>(null) } // ID стартовой вершины
+    val addVertexMode = remember { mutableStateOf(false) }
+    var canvasSize by remember { mutableStateOf(Size.Zero) }
+    val density = LocalDensity.current
+    var showFileDialog by remember { mutableStateOf(false) }
+    var setStartVertexMode by remember { mutableStateOf(false) }
+    var animationTick by remember { mutableStateOf(0L) }
+    var speedValue by remember { mutableStateOf(0.5f) } // 0.0..1.0
+    val minDelay = 1000L
+    val maxDelay = 5000L
+    val animationDelay = ((1.0f - speedValue) * (maxDelay - minDelay) + minDelay).toLong()
+    val isStartPauseEnabled = controller.graph.vertecies.size > 1 && controller.startVertexId != null
+    val isSpeedEnabled = controller.isRunning || !controller.isRunning
+    var showFullTable by remember { mutableStateOf(false) }
+    val isShowTableEnabled = controller.dijkstraResult != null && (controller.isPaused || !controller.isRunning)
+    val isResetEnabled = controller.dijkstraResult != null
+
+    fun handleStartPause() {
+        when {
+            !controller.isRunning -> controller.startDijkstraAnimation()
+            controller.isRunning && !controller.isPaused -> controller.pauseDijkstraAnimation()
+            controller.isRunning && controller.isPaused -> controller.resumeDijkstraAnimation()
+        }
+    }
+
+    fun handleToEnd() {
+        controller.goToEnd()
+    }
+
+    val isToEndEnabled = controller.dijkstraResult?.steps?.isNotEmpty() == true && controller.currentStep < (controller.dijkstraResult?.steps?.size ?: 1) - 1
+
+    // --- Анимация шагов алгоритма Дейкстры ---
+    androidx.compose.runtime.LaunchedEffect(controller.isRunning, controller.isPaused, controller.currentStep, animationDelay) {
+        while (controller.isRunning && !controller.isPaused) {
+            kotlinx.coroutines.delay(animationDelay)
+            controller.nextDijkstraStep()
+        }
+    }
 
     Row(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Левая колонка (граф, таблица состояний, пояснения)
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
         ) {
-            // Контейнер для холста графа
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(340.dp)
                     .onGloballyPositioned { coordinates ->
-                        // Запоминаем размеры холста при их изменении
                         canvasSize = Size(
                             coordinates.size.width.toFloat(),
                             coordinates.size.height.toFloat()
                         )
                     }
             ) {
-                // Рассчитываем отступы в пикселях
                 val paddingPx = with(density) { (24.dp + 2.dp + 6.dp).toPx() }
-
-                // Компонент отображения графа
                 GraphCanvas(
                     vertices = controller.graph.vertecies.map {
-                        if (it.id == startVertexId) it.copy(color = org.example.graph.VertexColor.YELLOW)
-                        else it.copy(color = org.example.graph.VertexColor.GRAY)
+                        if (it.id == controller.startVertexId) it.copy(color = graph.VertexColor.YELLOW)
+                        else it.copy(color = graph.VertexColor.GRAY)
                     },
                     edges = controller.graph.edges,
-                    // Обработчик клика по холсту
-                    onCanvasClick = if (addVertexMode.value) { x, y ->
-                        // Проверяем, что клик внутри допустимой области
+                    currentStepData = controller.dijkstraResult?.steps?.getOrNull(controller.currentStep),
+                    onCanvasClick = if (!controller.isRunning && addVertexMode.value) { x, y ->
                         if (
                             x > paddingPx && x < canvasSize.width - paddingPx &&
                             y > paddingPx && y < canvasSize.height - paddingPx
                         ) {
-                            controller.addVertex(x, y) // Добавляем вершину
+                            controller.addVertex(x, y)
                         }
-                        addVertexMode.value = false // Выходим из режима добавления
-                    } else if (setStartVertexMode) { x, y ->
-                        // Поиск вершины, по которой кликнули
+                    } else if (!controller.isRunning && setStartVertexMode) { x, y ->
                         val clickedVertex = controller.graph.vertecies.find {
                             val dx = it.xCoordinate - x
                             val dy = it.yCoordinate - y
-                            dx * dx + dy * dy <= 24f * 24f // Проверка попадания в круг вершины
+                            dx * dx + dy * dy <= 24f * 24f
                         }
                         if (clickedVertex != null) {
-                            startVertexId = clickedVertex.id // Устанавливаем стартовую вершину
-                            setStartVertexMode = false // Выходим из режима выбора
+                            controller.setStartVertex(clickedVertex.id)
+                            setStartVertexMode = false
                         }
                     } else null,
-
-                    // Обработчики операций с графом
-                    onAddEdge = { sourceId, targetId, weight ->
+                    onAddEdge = if (!controller.isRunning) { { sourceId, targetId, weight ->
                         controller.addEdge(sourceId, targetId, weight)
-                    },
-                    onDeleteEdge = { sourceId, targetId ->
+                    }} else null,
+                    onDeleteEdge = if (!controller.isRunning) { { sourceId, targetId ->
                         controller.deleteEdge(sourceId, targetId)
-                    },
-                    onDeleteVertex = { vertexId ->
+                    }} else null,
+                    onDeleteVertex = if (!controller.isRunning) { { vertexId ->
                         controller.deleteVertex(vertexId)
-                        if (startVertexId == vertexId) startVertexId = null
-                    }
+                    }} else null
                 )
             }
-
-            Spacer(modifier = Modifier.height(12.dp)) // Вертикальный отступ
-            StateTable() // Таблица состояний
-            Spacer(modifier = Modifier.height(8.dp)) // Вертикальный отступ
-            StepExplanation() // Пояснение шагов
+            // Легенда цветов
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                LegendCircle(Color(0xFFFFD600), "старт")
+                LegendCircle(Color(0xFF1976D2), "текущая")
+                LegendCircle(Color(0xFF43A047), "посещено")
+                LegendCircle(Color(0xFFB0B0B0), "не посещено")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    var showInstruction by remember { mutableStateOf(false) }
+                    androidx.compose.material.Button(onClick = { showInstruction = true }) {
+                        Text("Инструкция")
+                    }
+                    if (showInstruction) {
+                        InstructionDialog(onClose = { showInstruction = false })
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            DijkstraTable(controller)
+            Spacer(modifier = Modifier.height(8.dp))
+            StepExplanation(controller)
         }
-
-        Spacer(modifier = Modifier.width(16.dp)) // Горизонтальный отступ
-
-        // Панель управления справа
+        Spacer(modifier = Modifier.width(16.dp))
         ControlPanel(
             controller,
-            onAddVertexClick = { addVertexMode.value = true }, // Включение режима добавления вершины
+            onAddVertexClick = { if (!controller.isRunning) addVertexMode.value = !addVertexMode.value },
+            isAddVertexModeActive = addVertexMode.value && !controller.isRunning,
             onLoadGraphClick = {
-                // Показываем выбор файла только если граф пустой
-                if (controller.graph.vertecies.isEmpty() && controller.graph.edges.isEmpty()) {
+                if (!controller.isRunning && controller.graph.vertecies.isEmpty() && controller.graph.edges.isEmpty()) {
                     showFileDialog = true
                 }
             },
             onSetStartVertexClick = {
-                setStartVertexMode = true // Включение режима выбора стартовой вершины
-            }
+                if (!controller.isRunning) setStartVertexMode = true
+            },
+            onStartPauseClick = { handleStartPause() },
+            isStartPauseEnabled = isStartPauseEnabled,
+            speedValue = speedValue,
+            onSpeedChange = { speedValue = it },
+            isSpeedEnabled = isSpeedEnabled,
+            onToEndClick = { handleToEnd() },
+            isToEndEnabled = isToEndEnabled,
+            onShowTableClick = { showFullTable = !showFullTable },
+            isShowTableEnabled = isShowTableEnabled,
+            isTableShown = showFullTable,
+            onResetAlgorithmClick = { controller.resetDijkstra() },
+            isResetEnabled = isResetEnabled
         )
-
-        // Обработка показа выбора файла
         if (showFileDialog) {
             LaunchedEffect(Unit) {
                 val filePath = withContext(Dispatchers.IO) { showFileChooser() }
                 showFileDialog = false
                 if (filePath != null) {
-                    controller.loadGraph(filePath) // Загружаем граф из файла
+                    controller.loadGraph(filePath)
+                }
+            }
+        }
+        if (showFullTable) {
+            androidx.compose.ui.window.Window(
+                onCloseRequest = { showFullTable = false },
+                title = "Таблица алгоритма Дейкстры",
+                resizable = true,
+                alwaysOnTop = true
+            ) {
+                Box(Modifier.fillMaxSize().background(Color.White)) {
+                    FullDijkstraTable(controller)
                 }
             }
         }
     }
 }
 
-// Компонент таблицы состояний
 @Composable
 fun StateTable() {
     Box(
@@ -159,35 +221,94 @@ fun StateTable() {
     )
 }
 
-// Компонент пояснения шагов
 @Composable
-fun StepExplanation() {
+fun StepExplanation(controller: AppController) {
+    val steps = controller.dijkstraResult?.steps
+    val currentStep = controller.currentStep
+    val isLast = steps != null && currentStep == steps.lastIndex && steps.isNotEmpty()
+
+    val dijkstraExplanation = when {
+        isLast -> "Конец алгоритма"
+        else -> steps?.getOrNull(currentStep)?.action
+    }
+
+    val explanation = dijkstraExplanation ?: controller.notification ?: ""
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(36.dp)
             .background(Color.White, shape = RoundedCornerShape(8.dp))
-            .border(1.dp, Color(0xFFCCCCCC), shape = RoundedCornerShape(8.dp))
-    )
+            .border(1.dp, Color(0xFFCCCCCC), shape = RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Text(explanation, fontSize = 15.sp, color = Color(0xFF444444), modifier = Modifier.padding(start = 12.dp))
+    }
 }
 
-// Функция показа выбора файла
+
 fun showFileChooser(): String? {
     val chooser = JFileChooser()
     val result = chooser.showOpenDialog(null)
     return if (result == JFileChooser.APPROVE_OPTION) chooser.selectedFile.absolutePath else null
 }
 
-// Функция создания и показа главного окна приложения
-fun showMainWindow() = application {
-    val controller = remember { AppController() } // Создаем контроллер приложения
+@Composable
+fun LegendCircle(color: Color, label: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+                .border(1.dp, Color(0xFF888888), shape = androidx.compose.foundation.shape.CircleShape)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(label, fontSize = 12.sp, color = Color.Gray)
+    }
+}
 
+fun showMainWindow() = application {
+    val controller = remember { AppController() }
     Window(
-        onCloseRequest = ::exitApplication, // Обработчик закрытия окна
-        title = "Dijkstra visualisation", // Заголовок окна
-        resizable = true, // Возможность изменять размер
+        onCloseRequest = ::exitApplication,
+        title = "Dijkstra visualisation",
+        resizable = true,
         state = androidx.compose.ui.window.rememberWindowState(width = 900.dp, height = 600.dp)
     ) {
-        MainWindowContent(controller) // Содержимое главного окна
+        MainWindowContent(controller)
+    }
+}
+
+@Composable
+fun InstructionDialog(onClose: () -> Unit) {
+    val instructionText = remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        try {
+            instructionText.value = java.io.File("README_instruction.txt").readText()
+        } catch (e: Exception) {
+            instructionText.value = "Не удалось загрузить инструкцию."
+        }
+    }
+    androidx.compose.ui.window.DialogWindow(
+        onCloseRequest = onClose,
+        title = "Инструкция",
+        state = androidx.compose.ui.window.rememberDialogState(width = 700.dp, height = 500.dp)
+    ) {
+        val scrollState = rememberScrollState()
+        Box(Modifier.fillMaxSize().background(Color.White).padding(24.dp)) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).verticalScroll(scrollState)) {
+                    Text(
+                        instructionText.value,
+                        fontSize = 15.sp,
+                        color = Color(0xFF222222),
+                        modifier = Modifier.fillMaxWidth().padding(end = 12.dp)
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                androidx.compose.material.Button(onClick = onClose, modifier = Modifier.align(Alignment.End)) {
+                    Text("Закрыть")
+                }
+            }
+        }
     }
 }
