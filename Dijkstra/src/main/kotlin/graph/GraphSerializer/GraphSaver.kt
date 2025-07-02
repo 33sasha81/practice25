@@ -1,14 +1,12 @@
-package org.example.graph.GraphSerializer
+package graph.GraphSerializer
 
 import java.util.UUID
 
 import com.google.gson.Gson
-import org.example.graph.Graph
+import graph.Graph
 
 // Класс для сохранения графа в файл
 class GraphSaver {
-
-    // TODO: добавить проверку на корректность графа перед сохранением
     
     fun saveGraphToFile(graph: Graph, filePath: String): String {
         if (filePath.isEmpty()) {

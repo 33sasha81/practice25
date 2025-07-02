@@ -1,4 +1,4 @@
-package org.example.graph
+package graph
 
 // Класс для представления вершины графа
 data class Vertex(var id: Int, var xCoordinate: Int, var yCoordinate: Int, var color: VertexColor = VertexColor.GRAY, var name: String) {
