@@ -21,13 +21,17 @@ class AppController {
     var dijkstraResult by mutableStateOf<DijkstraResult?>(null)
         private set
 
+    // Финальный шаг алгоритма Дейкстры для отображения в таблице после загрузки
+    var finalDijkstraStep by mutableStateOf<algorithm.DijkstraStep?>(null)
+        private set
+
     var notification by mutableStateOf<String?>(null)
         private set
 
     var errorMessage by mutableStateOf<String?>(null)
-        private set    
+        private set
 
-    // --- Состояние анимации алгоритма Дейкстры ---
+    // Состояние анимации алгоритма Дейкстры
     var isRunning by mutableStateOf(false)
         private set
     var isPaused by mutableStateOf(false)
@@ -65,7 +69,7 @@ class AppController {
             currentGraph.deleteVertexByid(vertexId)
             graph = createGraphCopy(currentGraph)
             notification = "Вершина $vertexName удалена"
-        } 
+        }
         catch (e: Exception) {
             errorMessage = "Ошибка при удалении вершины: ${e.message}"
         }
@@ -77,7 +81,7 @@ class AppController {
         // Проверка на кратные рёбра (без учёта направления)
         val exists = currentGraph.edges.any {
             (it.source == sourceId && it.target == targetId) ||
-            (it.source == targetId && it.target == sourceId)
+                    (it.source == targetId && it.target == sourceId)
         }
         if (exists) {
             errorMessage = "Ребро между $sourceId и $targetId уже существует!"
@@ -101,7 +105,7 @@ class AppController {
             currentGraph.deleteEdgeBySourceAndTarget(sourceId, targetId)
             graph = createGraphCopy(currentGraph)
             notification = "Ребро удалено"
-        } 
+        }
         catch (e: Exception) {
             errorMessage = "Ошибка при удалении ребра: ${e.message}"
         }
@@ -112,7 +116,7 @@ class AppController {
         val currentGraph = graph
         val edge = currentGraph.edges.find {
             (it.source == sourceId && it.target == targetId) ||
-            (it.source == targetId && it.target == sourceId)
+                    (it.source == targetId && it.target == sourceId)
         }
         if (edge != null) {
             edge.updateWeight(newWeight)
@@ -180,11 +184,11 @@ class AppController {
         } else null
     }
 
-    // Соохранение графа в файл
+    // Сохранение графа в файл
     fun saveGraph() {
         try {
-            val savedPath = saver.saveGraphToFile(graph, ".")
-            notification = "Граф успешно сохранен в: $savedPath"
+            val savedPath = saver.saveGraphToFile(graph, ".", startVertexId)
+            notification = "Граф и результаты алгоритма Дейкстры успешно сохранены в: $savedPath"
         } catch (e: Exception) {
             errorMessage = "Ошибка при сохранении графа: ${e.message}"
         }
@@ -193,12 +197,39 @@ class AppController {
     // Загрузка графа из файла
     fun loadGraph(filePath: String) {
         try {
-            graph = loader.loadGraphFromFile(filePath)
-            val startVertex = graph.vertecies.find { it.color == VertexColor.YELLOW }
-            startVertexId = startVertex?.id
-            notification = "Граф успешно загружен из файла: $filePath"
+            val graphWithDijkstra = loader.loadGraphFromFile(filePath)
+            graph = graphWithDijkstra.graph
+
+            // Восстанавливаем начальную вершину
+            startVertexId = graphWithDijkstra.startVertexId
+
+            // Если в загруженном файле есть результаты Дейкстры, восстанавливаем их
+            if (graphWithDijkstra.dijkstraResult != null) {
+                dijkstraResult = graphWithDijkstra.dijkstraResult
+                // Если есть начальная вершина, устанавливаем её цвет
+                if (startVertexId != null) {
+                    val startVertex = graph.vertecies.find { it.id == startVertexId }
+                    startVertex?.color = VertexColor.YELLOW
+                }
+                // Добавлено: сохраняем только финальный шаг
+                finalDijkstraStep = dijkstraResult?.steps?.lastOrNull()
+            } else {
+                // Если нет результатов Дейкстры, но есть начальная вершина, запускаем алгоритм
+                if (startVertexId != null) {
+                    dijkstraResult = algorithm.dijkstra(graph, startVertexId!!)
+                    val startVertex = graph.vertecies.find { it.id == startVertexId }
+                    startVertex?.color = VertexColor.YELLOW
+                    // Добавлено: сохраняем только финальный шаг
+                    finalDijkstraStep = dijkstraResult?.steps?.lastOrNull()
+                } else {
+                    finalDijkstraStep = null
+                }
+            }
+
+            notification = "Граф и результаты алгоритма Дейкстры успешно загружены из файла: $filePath"
         } catch (e: Exception) {
             errorMessage = e.message ?: "Ошибка при загрузке графа"
+            finalDijkstraStep = null
         }
     }
 
@@ -242,6 +273,7 @@ class AppController {
         isRunning = true
         isPaused = false
         currentStep = 0
+        finalDijkstraStep = null
     }
 
     // Пауза анимации
@@ -268,7 +300,7 @@ class AppController {
     fun dismissError() {
         errorMessage = null
     }
-    
+
     // Следующий шаг анимации
     fun nextDijkstraStep() {
         val steps = dijkstraResult?.steps ?: return
@@ -294,6 +326,7 @@ class AppController {
         isRunning = false
         isPaused = false
         currentStep = 0
+        finalDijkstraStep = null
     }
 
 }
